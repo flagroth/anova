@@ -1,0 +1,84 @@
+---
+title: "Ejercicio clase"
+author: "Data drillers"
+date: "24 de febrero de 2017"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(effects)
+```
+
+```{r}
+dir <- "/hdd1/Dropbox/Dropbox/MasterDS/AnaliticaNegocio/ejercicio-clase"
+setwd(dir)
+datos <- read.csv("data/ACMETelephoneABT.csv")
+
+# Corregir NAs y unificar valores en regionType
+
+datos$regionType[which(datos$regionType == " unknown")] <- NA
+datos$regionType[which(datos$regionType == " ")] <- NA
+datos$regionType[which(datos$regionType == " r")] <- " rural"
+datos$regionType[which(datos$regionType == " s")] <- " suburban"
+datos$regionType[which(datos$regionType == " t")] <- " town"
+datos$regionType = factor(datos$regionType, levels=c(levels(datos$regionType), " otro"))
+datos$regionType[is.na(datos$regionType)] <- " otro"
+datos$regionType <- droplevels(datos$regionType)
+
+datos <- datos[which(datos$avgBill>0 & datos$avgMins>0),]
+datos <- datos[which(datos$avgBill>0 | datos$avgMins>0),]
+
+summary(datos$avgBill)
+summary(datos$avgMins)
+summary(datos$regionType)
+```
+# Ejercicio 1
+
+Ajustar modelo log(avgBill)~log(avgMins)+regionType e interpretar coeficientes
+
+```{r}
+model1 <- lm(log(avgBill)~log(avgMins)+regionType,data = datos, na.action = NULL)
+summary(model1)
+
+predicted_fit = predict(model1,interval="confidence")
+datos %>% mutate(fit = predicted_fit[,1],
+                      lwr = predicted_fit[,2],
+                      upr = predicted_fit[,3]) %>%
+  ggplot(mapping=aes(x=log(avgBill), y=log(avgMins), color=regionType)) + geom_point() + geom_smooth(se=FALSE,method="lm") +
+  ggtitle("Rectas de regresión por grupo")
+```
+
+Comentario                                                                 | Coef regresion
+-------------------------------------------------------------------------- | -------------------------
+Ordenada origen                                                            | b0=2.148986                
+Incremento de avgBill en grupo rural (ref) incremento unitario en avgMins  | b1=0.308630                
+Incremento de avgBill en grupo suburban por incremento unitario en avgMins | b0+b2=2.148986+(-0.025620) 
+Incremento de avgBill en grupo town con avgMins constante                  | b0+b3=2.148986+(-0.023006) 
+Incremento de avgBill en grupo otro con avgMins constante                  | b0+b4=2.148986+(-0.003376) 
+
+
+La factura es independiente de la regionType (p-value!=0)
+
+# Ejercicio 2
+
+Tabla ANOVA e interpretar resultados
+
+```{r}
+anova(model1)
+```
+
+La factura es independiente de la regionType
+
+# Ejercicio 3
+
+Medias ajustadas con intervalos de confianza
+
+```{r}
+e <- effect("regionType", model1)
+print(e)
+plot(e)
+
+```
